@@ -1,6 +1,6 @@
 # cvtool
 
-Personal handy CV tools
+Personal handy Computer Vision tools that I often need it
 
 ### Installation
 
