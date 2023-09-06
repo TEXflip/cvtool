@@ -26,11 +26,11 @@ if __name__ == '__main__':
 	# logger.setLevel(logging.DEBUG)
 
 	parser = argparse.ArgumentParser()
-	parser.add_argument('-c', '--convert', nargs=1, type=str, default=None, help='convert to image format')
+	parser.add_argument('-c', '--convert', type=str, default=None, help='convert to image format')
 	parser.add_argument('-r', '--recursive', action='store_true', default=False, help='use images recursively inside folders')
 	parser.add_argument('path', nargs='*', type=str, default=['.'], help='image or folder to input')
 	parser.add_argument('--fft', action='store_true', help='compute fft of images')
-	parser.add_argument('-s', '--save', nargs=1, type=str, default=None, help='save fft images to folder')
+	parser.add_argument('-s', '--save', type=str, default=None, help='save fft images to folder')
 	parser.add_argument('--show', action='store_true', help='show results')
 	parser.add_argument('--rectify', action=ActionRectify, help='rectify a rectangular portion of an image. Additional parameter: float, specify the aspect ratio of the rectangle (width/height)')
 	parser.add_argument('--overwrite', action='store_true', help='overwrite existing files')
