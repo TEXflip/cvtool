@@ -17,7 +17,7 @@ def find_suitable_name(path: Path, kwargs: dict) -> Path:
         if path.stem[-1].isdigit():
             # how many digits?
             d = 1
-            while path.stem[-(d+1)].isdigit():
+            while len(path.stem) <= d + 1 and path.stem[-(d+1)].isdigit():
                 d += 1
             # check if there is a separator
             if path.stem[-(d + 1)] in ["_", "-", ".", " ", "|"]:
