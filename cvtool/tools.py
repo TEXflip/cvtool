@@ -59,7 +59,7 @@ def apply_function_glob(paths: list, func = lambda x, kw: x, **kwargs):
         path = Path(path)
         if path.is_dir():
             for img_path in path.glob(glob):
-                if img_path.suffix[1:] in IM_SUFFIXES and img_path.suffix != ext:
+                if img_path.suffix[1:] in IM_SUFFIXES:
                     # im = Image.open(img_path)
                     # im.save(img.with_suffix(ext))
                     save_path = save / img_path.name if save else img_path.with_suffix(ext)
