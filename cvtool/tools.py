@@ -250,6 +250,7 @@ def print_info(img_path: Path, kwargs: dict = {}) -> None:
     max_l = 0
     for i in infos:
         max_l = max(max_l, len(str(i)))
+    max_l = min(max_l, 80)
     for i in infos:
         out = "\t- "
         for j in i:
