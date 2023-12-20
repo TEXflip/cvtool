@@ -1,8 +1,10 @@
+import io
 import logging
 from pathlib import Path
 
 import numpy as np
 import cv2
+from PIL import Image, ExifTags
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +19,13 @@ def find_suitable_name(path: Path, kwargs: dict) -> Path:
         if path.stem[-1].isdigit():
             # how many digits?
             d = 1
-            while len(path.stem) <= d + 1 and path.stem[-(d+1)].isdigit():
+            while len(path.stem) <= d + 1 and path.stem[-(d + 1)].isdigit():
                 d += 1
             # check if there is a separator
             if path.stem[-(d + 1)] in ["_", "-", ".", " ", "|"]:
                 sep = path.stem[-(d + 1)]
-            path = path.with_name(path.stem[:-(d + len(sep))] + path.suffix)
-        
+            path = path.with_name(path.stem[: -(d + len(sep))] + path.suffix)
+
         new_path = path.with_name(path.stem + f"{sep}{i}" + path.suffix)
         while new_path.exists():
             i += 1
@@ -32,24 +34,36 @@ def find_suitable_name(path: Path, kwargs: dict) -> Path:
     else:
         return path
 
-def apply_function_single(img_path: Path, out_path: Path, func = lambda x: x, **kwargs):
+
+def apply_function_single(img_path: Path, out_path: Path, func=lambda x: x, **kwargs):
     out_path = find_suitable_name(out_path, kwargs)
+
+    if kwargs.get("info"):
+        print_info(img_path, kwargs)
+
     im = cv2.imread(str(img_path))
     im = func(im, kwargs)
+
     if im is None:
         logger.warning(f"Operation Canceled for {img_path}")
         return
+
     if kwargs.get("show"):
         cv2.imshow(img_path.name, im)
         while True:
             k = cv2.waitKey(100)
-            if k == 27 or cv2.getWindowProperty(img_path.name, cv2.WND_PROP_VISIBLE) < 1:
+            if (
+                k == 27
+                or cv2.getWindowProperty(img_path.name, cv2.WND_PROP_VISIBLE) < 1
+            ):
                 break
         cv2.destroyAllWindows()
-    else:
+
+    if kwargs.get("write"):
         cv2.imwrite(str(out_path), im)
 
-def apply_function_glob(paths: list, func = lambda x, kw: x, **kwargs):
+
+def apply_function_glob(paths: list, func=lambda x, kw: x, **kwargs):
     save_format = kwargs.get("convert", None)
     ext = "." + ("jpg" if save_format is None else save_format)
     glob = "**/*" if kwargs["recursive"] else "*"
@@ -62,7 +76,9 @@ def apply_function_glob(paths: list, func = lambda x, kw: x, **kwargs):
                 if img_path.suffix[1:] in IM_SUFFIXES:
                     # im = Image.open(img_path)
                     # im.save(img.with_suffix(ext))
-                    save_path = save / img_path.name if save else img_path.with_suffix(ext)
+                    save_path = (
+                        save / img_path.name if save else img_path.with_suffix(ext)
+                    )
                     apply_function_single(img_path, save_path, func, **kwargs)
                 else:
                     logger.debug(f"skipping {img_path}")
@@ -74,6 +90,7 @@ def apply_function_glob(paths: list, func = lambda x, kw: x, **kwargs):
         else:
             logger.warning(f"Invalid path: {path}")
 
+
 def fft(img: np.ndarray, kwargs: dict = {}) -> np.ndarray:
     """
     Compute the Fast Fourier Transform of an image.
@@ -84,18 +101,21 @@ def fft(img: np.ndarray, kwargs: dict = {}) -> np.ndarray:
 
     # Perform 2D FFT on the image
     fft_image = np.fft.fft2(img)
-    
+
     # Shift the zero frequency component to the center of the spectrum
     shifted_fft = np.fft.fftshift(fft_image)
-    
+
     # Compute the magnitude spectrum
     magn_spectrum = (20 * np.log(np.abs(shifted_fft))).astype(np.float32)
-    
+
     _min_px = np.min(magn_spectrum)
-    magn_spectrum = (magn_spectrum - _min_px) / (np.max(magn_spectrum) - _min_px) * 255.
+    magn_spectrum = (
+        (magn_spectrum - _min_px) / (np.max(magn_spectrum) - _min_px) * 255.0
+    )
     magn_spectrum = magn_spectrum.astype(np.uint8)
-    
+
     return magn_spectrum
+
 
 def rectify(img: np.ndarray, kwargs: dict = {}) -> np.ndarray:
     points = kwargs["rectify"].get("rect_points", [])
@@ -108,47 +128,51 @@ def rectify(img: np.ndarray, kwargs: dict = {}) -> np.ndarray:
         h, w = img.shape[:2]
         img_scaling = np.linalg.norm(points[0] - points[3]) / h
         scaled_h = int(np.ceil(h * img_scaling))
-        original_aspect_ratio = 1.0 # w / h
+        original_aspect_ratio = 1.0  # w / h
         orig_size_param = kwargs["rectify"].get("original_size", True)
 
         if orig_size_param:
             if isinstance(orig_size_param, bool):
-                original_aspect_ratio = float(np.linalg.norm(points[0] - points[1]) / np.linalg.norm(points[1] - points[2]))
+                original_aspect_ratio = float(
+                    np.linalg.norm(points[0] - points[1])
+                    / np.linalg.norm(points[1] - points[2])
+                )
             elif isinstance(orig_size_param, float):
                 original_aspect_ratio = orig_size_param
             else:
                 logger.warning(f"Invalid original_size parameter: {orig_size_param}")
-        
+
         proj_w = int(np.round(scaled_h * original_aspect_ratio))
-        projected_points = np.array([
-            [0, 0],
-            [proj_w, 0],
-            [proj_w, scaled_h],
-            [0, scaled_h]
-        ], dtype=np.float32)
+        projected_points = np.array(
+            [[0, 0], [proj_w, 0], [proj_w, scaled_h], [0, scaled_h]], dtype=np.float32
+        )
 
         M = cv2.getPerspectiveTransform(points, projected_points)
-        img_rectify = cv2.warpPerspective(img, M, (proj_w, scaled_h), flags=cv2.INTER_LINEAR)
+        img_rectify = cv2.warpPerspective(
+            img, M, (proj_w, scaled_h), flags=cv2.INTER_LINEAR
+        )
 
         return img_rectify
-    
+
     return None
+
 
 def select_4_points(img: np.ndarray):
     points = []
     mouse = [0, 0]
     move_props = [False, (0, 0)]
+
     def rectangle_drawing(event, x, y, flags, param):
-        if event==cv2.EVENT_LBUTTONDOWN:
+        if event == cv2.EVENT_LBUTTONDOWN:
             if len(points) < 5:
                 points.append((x, y))
-                if len(points) >= 4: 
+                if len(points) >= 4:
                     points.append(points[0])
             else:
                 move_props[0] = True
                 move_props[1] = (x, y)
 
-        elif event==cv2.EVENT_MOUSEMOVE:
+        elif event == cv2.EVENT_MOUSEMOVE:
             mouse[0] = x
             mouse[1] = y
             if move_props[0]:
@@ -158,31 +182,76 @@ def select_4_points(img: np.ndarray):
                 for i in range(len(points)):
                     points[i] = (points[i][0] + dx, points[i][1] + dy)
 
-        elif event==cv2.EVENT_LBUTTONUP:
+        elif event == cv2.EVENT_LBUTTONUP:
             move_props[0] = False
 
     window_name = "rectify"
     cv2.namedWindow(window_name)
     cv2.setMouseCallback(window_name, rectangle_drawing)
     k = -1
-    while k != 13: # enter
+    while k != 13:  # enter
         img_draw = img.copy()
         if len(points) > 0:
             for i, p in enumerate(points):
-                cv2.circle(img_draw, center=p, radius=3, color=(255,0,0), thickness=-1)
+                cv2.circle(
+                    img_draw, center=p, radius=3, color=(255, 0, 0), thickness=-1
+                )
                 if i > 0:
-                    cv2.line(img_draw, points[i-1], points[i], color=(0,0,0), thickness=1)
+                    cv2.line(
+                        img_draw, points[i - 1], points[i], color=(0, 0, 0), thickness=1
+                    )
             if len(points) < 4:
-                cv2.line(img_draw, points[-1], (mouse[0], mouse[1]), color=(0,0,0), thickness=1)
+                cv2.line(
+                    img_draw,
+                    points[-1],
+                    (mouse[0], mouse[1]),
+                    color=(0, 0, 0),
+                    thickness=1,
+                )
         cv2.imshow(window_name, img_draw)
         k = cv2.waitKey(16)
 
         if k != -1:
             logger.debug(f"key pressed: {k}")
 
-        if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1 \
-            or k == 27 or k == 13: # esc or enter, TODO: make os independent
+        if (
+            cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1
+            or k == 27
+            or k == 13
+        ):  # esc or enter, TODO: make os independent
             break
     cv2.destroyAllWindows()
 
     return points[:4]
+
+
+def print_info(img_path: Path, kwargs: dict = {}) -> None:
+    print(f"Image: {img_path}")
+
+    infos = []
+
+    with open(img_path, "rb") as f:
+        img_bytes = io.BytesIO(f.read())
+    infos.append(["File Size", img_bytes.getbuffer().nbytes])
+    img = Image.open(img_bytes)
+
+    infos.append(["Format", img.format])
+    infos.append(["Size", img.size])
+    infos.append(["Mode", img.mode])
+
+    for k, v in img.getexif().items():
+        infos.append(["Exif", k, v])
+
+    if img_path.suffix[1:] == "png":
+        for k, v in img.info.items():
+            infos.append(["PNG", k, v])
+
+    # print infos
+    max_l = 0
+    for i in infos:
+        max_l = max(max_l, len(str(i)))
+    for i in infos:
+        out = "\t- "
+        for j in i:
+            out += str(j).ljust(max_l//2)
+        print(out)

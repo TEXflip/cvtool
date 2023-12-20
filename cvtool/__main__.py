@@ -6,12 +6,18 @@ from cvtool.tools import *
 
 def main(kwargs: dict):
 	if kwargs.get("fft"):
+		kwargs["write"] = not kwargs.get("show", False)
 		apply_function_glob(kwargs["path"], func=fft, **kwargs)
 
 	elif kwargs.get("rectify"):
+		kwargs["write"] = not kwargs.get("show", False)
 		apply_function_glob(kwargs["path"], func=rectify, **kwargs)
 
 	elif kwargs.get("convert", None):
+		kwargs["write"] = not kwargs.get("show", False)
+		apply_function_glob(kwargs["path"], func=lambda x, kw: x, **kwargs)
+	
+	elif kwargs.get("info"):
 		apply_function_glob(kwargs["path"], func=lambda x, kw: x, **kwargs)
 
 
@@ -34,6 +40,7 @@ if __name__ == '__main__':
 	parser.add_argument('--show', action='store_true', help='show results')
 	parser.add_argument('--rectify', action=ActionRectify, help='rectify a rectangular portion of an image. Additional parameter: float, specify the aspect ratio of the rectangle (width/height)')
 	parser.add_argument('--overwrite', action='store_true', help='overwrite existing files')
+	parser.add_argument('--info', action='store_true', help='show info about images')
 	# parser.add_argument('--debug', action='store_true', help='debug mode')
 	args = parser.parse_args()
 
